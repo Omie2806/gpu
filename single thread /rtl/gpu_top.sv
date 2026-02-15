@@ -62,8 +62,9 @@ always @(*) begin
     result_source = 0;
     mem_write = 0;
     lw_or_sw = 0;
+    alu_control = 4'b0000;
     case (opcode)
-        3'b000: begin //add
+        4'b0000: begin //add
             alu_source = 0;
             alu_control = 4'b0000;
             we = 1;
@@ -71,7 +72,7 @@ always @(*) begin
             lsu_en = 0;
             result_source = 0;
         end
-        3'b001: begin //sub
+        4'b0001: begin //sub
             alu_source = 0;
             alu_control = 4'b0001;
             we = 1;
@@ -79,7 +80,7 @@ always @(*) begin
             lsu_en = 0;
             result_source = 0;
         end
-        3'b010: begin //mul
+        4'b0010: begin //mul
             alu_source = 0;
             alu_control = 4'b0010;
             we = 1;
@@ -87,7 +88,7 @@ always @(*) begin
             lsu_en = 0;
             result_source = 0;
         end
-        3'b011: begin //and
+        4'b0011: begin //and
             alu_source = 0;
             alu_control = 4'b0011;
             we = 1;
@@ -95,7 +96,7 @@ always @(*) begin
             lsu_en = 0;
             result_source = 0;
         end
-        3'b100: begin //or
+        4'b0100: begin //or
             alu_source = 0;
             alu_control = 4'b0100;
             we = 1;
@@ -103,7 +104,7 @@ always @(*) begin
             lsu_en = 0;
             result_source = 0;
         end
-        3'b101: begin //xor
+        4'b0101: begin //xor
             alu_source = 0;
             alu_control = 4'b0101;
             we = 1;
@@ -111,7 +112,7 @@ always @(*) begin
             lsu_en = 0;
             result_source = 0;
         end
-        3'b110: begin//lw
+        4'b0110: begin//lw
             alu_source = 1;
             alu_control = 4'b0000;
             we = 1;
@@ -120,7 +121,7 @@ always @(*) begin
             lw_or_sw = 1;
             lsu_en = 1;
         end
-        3'b111: begin //sw
+        4'b0111: begin //sw
            alu_source = 1;
            alu_control = 4'b0000; 
            mem_write = 1;
@@ -133,8 +134,10 @@ end
 
 
 //imm_gen
-logic[15 : 0] imm = instr[31 : 16];
+logic[15 : 0] imm;
 logic[15 : 0] imm_out;
+
+assign imm = instr[31 : 16];
 
 imm_gen imm_inst (
     .imm(imm),
