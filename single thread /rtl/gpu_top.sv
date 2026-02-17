@@ -2,6 +2,10 @@ module gpu_top (
     input logic clk,
     input logic reset
 );
+
+// DEBUG REGISTER MATRIX
+logic [15:0] debug_regs [0:15][0:15];
+
 //pc 
 logic [15 : 0] pc, pc_next;
 pc pc_inst (
@@ -20,9 +24,13 @@ instr_mem instr_inst(
     .instr(instr)
 );
 
+//active mask
+logic[15 : 0] active_mask;
+initial active_mask = 16'hFFFF;
+
 //register file
 logic[3 : 0] A1, A2, A3;
-logic[15 : 0] WD;
+logic[15 : 0] WD [0 : 15];
 logic[15 : 0] block_idx, block_dim, thread_idx;
 //contrl
 logic we, reg_en;
@@ -32,27 +40,82 @@ assign A1 = instr[3 : 0];
 assign A2 = instr[7 : 4];
 assign A3 = instr[11 : 8];
 
-reg_file reg_inst(
-    .clk(clk),
-    .reset(reset),
-    .A1(A1),
-    .A2(A2),
-    .A3(A3),
-    .RS1(RS1),
-    .RS2(RS2),
-    .block_idx(block_idx),
-    .block_dim(block_dim),
-    .thread_idx(thread_idx),
-    .WD(result_source_mux),
+//alu_source mux
+logic[15 : 0] alu_source_mux [0 : 15];
 
-    //CONTRL
-    .we(we),
-    .reg_en(reg_en)
+//alu data path
+logic [15 : 0] RS1 [0 : 15];
+logic [15 : 0] RS2 [0 : 15];
+logic [15 : 0] alu_result[0 : 15];
+// control path
+logic [3 : 0]  alu_control;
+logic zero [0 : 15];
+
+logic[15 : 0] result_source_mux [0 : 15];
+logic result_source;
+
+genvar i;
+generate
+    for (i = 0; i < 16; i++) begin: lane_array
+
+        assign alu_source_mux[i]    = alu_source ? imm_out : RS2[i];
+        assign result_source_mux[i] = result_source ? lw_out : alu_result[i];
+
+        reg_file reg_inst(
+            .clk(clk),
+            .reset(reset),
+            .A1(A1),
+            .A2(A2),
+            .A3(A3),
+            .RS1(RS1[i]),
+            .RS2(RS2[i]),
+            .block_idx(block_idx),
+            .block_dim(block_dim),
+            .thread_idx(16'(i)),
+            .WD(result_source_mux[i]),
+
+            //CONTRL
+            .we(we && active_mask[i]),
+            .reg_en(reg_en && active_mask[i])
+        );
+
+        alu alu_inst (
+            .A(RS1[i]),
+            .B(alu_source_mux[i]),
+            .alu_result(alu_result[i]),
+            .alu_control(alu_control),
+            .zero(zero[i])
+        );
+
+        genvar r;
+        for (r = 0; r < 16; r++) begin: debug_copy
+            assign debug_regs[i][r] = reg_inst.REGISTER[r];
+        end
+
+    end
+endgenerate
+
+
+//lsu
+//control
+logic lw_or_sw, lsu_en;
+logic[15 : 0] lw_out, sw_out, addr_out, lw_in;
+//datapath
+lsu lsu_inst (
+    .lw_or_sw(lw_or_sw),
+    .lsu_en(lsu_en),
+    .addr_in(alu_result[0]),
+    .addr_out(addr_out),
+    .lw_in(lw_in),
+    .sw_in(RS2[0]),
+    .sw_out(sw_out),
+    .lw_out(lw_out)
 );
+
 
 //control unit
 logic [3 : 0] opcode;
-logic alu_source = 0;
+logic alu_source;
 assign opcode = instr[15 : 12];
 always @(*) begin
     alu_source = 0;
@@ -144,42 +207,6 @@ imm_gen imm_inst (
     .imm_out(imm_out)
 );
 
-//alu_source mux
-logic[15 : 0] alu_source_mux;
-assign alu_source_mux = alu_source ? imm_out : RS2;
-
-//alu data path
-logic [15 : 0] RS1, RS2, alu_result;
-// control path
-logic [3 : 0]  alu_control;
-logic zero;
-alu alu_inst (
-    .A(RS1),
-    .B(alu_source_mux),
-    .alu_result(alu_result),
-    .alu_control(alu_control),
-    .zero(zero)
-);
-
-//lsu
-//control
-logic lw_or_sw, lsu_en;
-logic[15 : 0] lw_out, sw_out, addr_out, lw_in;
-//datapath
-lsu lsu_inst (
-    .lw_or_sw(lw_or_sw),
-    .lsu_en(lsu_en),
-    .addr_in(alu_result),
-    .addr_out(addr_out),
-    .lw_in(lw_in),
-    .sw_in(RS2),
-    .sw_out(sw_out),
-    .lw_out(lw_out)
-);
-
-logic[15 : 0] result_source_mux;
-logic result_source;
-assign result_source_mux = result_source ? lw_out : alu_result;
 
 //data_mem datapath
 logic[15 : 0] addr;
