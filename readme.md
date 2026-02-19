@@ -1,11 +1,9 @@
 # 16-Lane SIMT GPU Core
 **A Complete Parallel Processing Architecture in SystemVerilog**
 
-![Status](https://img.shields.io/badge/status-fully_functional-brightgreen)
-![Tests](https://img.shields.io/badge/tests-112%2F112_passing-success)
-![Language](https://img.shields.io/badge/language-SystemVerilog-orange)
-![Lines](https://img.shields.io/badge/code-~600_lines-blue)
-
+**Systemverilog**
+**Vivado**
+**Icarus**
 ---
 
 ## 🎯 Overview
