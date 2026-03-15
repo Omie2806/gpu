@@ -1,52 +1,105 @@
-//still working
 module warp_scheduler #(
     parameter NUMBER_OF_WARPS = 4
 ) (
     input logic         clk, 
     input logic         reset,
-    input logic[15 : 0] warp_mask,
-    input logic[15 : 0] warp_pc,
-    input logic         mem_req,
-    input logic         mem_done,
-    input logic[1 : 0]  warp_idx,
-    input logic         halt,
+    // input logic[15 : 0] warp_mask, //initialize 
+    // input logic[15 : 0] warp_pc,  //initialize
+    input logic         mem_req, //from mem_scheduler
+    input logic         mem_done, //from mem_scheduler
+    input logic         halt, //from top
+    input logic[1 : 0]  warp_id_from_ms, //to memory_scheduler
 
+    output logic[1 : 0]  warp_id_to_ms, //from memory_scheduler
     output logic[15 : 0] warp_ready, //pc of ready warp
     output logic[15 : 0] warp_ready_mask
+    // output logic         done
 );
 
-logic        warp_stall;
-logic[1 : 0] current_warp;
+reg[1 : 0] current_warp;
+
 //warp table
 reg[15 : 0] WARP_PC  [0 : NUMBER_OF_WARPS - 1];
 reg[15 : 0] WARP_MASK[0 : NUMBER_OF_WARPS - 1];
 
-reg        WARP_STALL [0 : NUMBER_OF_WARPS - 1];
-reg[1 : 0] WARP_IDX   [0 : NUMBER_OF_WARPS - 1];
+reg WARP_STALL    [0 : NUMBER_OF_WARPS - 1];
+reg WARP_FINISHED [0 : NUMBER_OF_WARPS - 1];
 
 typedef enum logic [2 : 0] {
     IDLE            = 3'b000,
     REQUESTING      = 3'b001,
-    MEMORY_REQ_DONE = 3'b010,
-    WARP_DONE       = 3'b011
+    WARP_DONE       = 3'b010
 } state_t;
 
 state_t state_curr;
 
+
 always_ff @(posedge clk) begin
     if(reset) begin
         for(integer i = 0; i < NUMBER_OF_WARPS; i++) begin
-            WARP_STALL[i] <= 0;
-            WARP_PC[i]    <= warp_pc;
-            WARP_MASK[i]  <= warp_mask;  
-            WARP_IDX[i]   <= i;
+            WARP_STALL[i]    <= 0;
+            WARP_FINISHED[i] <= 0;
+            WARP_MASK[i]     <= 16'hFFFF;  
         end
-        current_warp  <= 2'b00;
+        current_warp       <= 2'b00;
+        state_curr         <= IDLE;
+
+        WARP_PC[0] <= 16'h0000;  // starts at 0  runs until HALT
+        WARP_PC[1] <= 16'h0010;  // starts at 16 runs until HALT
+        WARP_PC[2] <= 16'h0020;  // starts at 32 runs until HALT
+        WARP_PC[3] <= 16'h0030;  // starts at 48 runs until HALT
     end
     else begin
-        
+        case (state_curr)
+            IDLE: begin
+                if(mem_req) begin
+                    warp_id_to_ms              <= current_warp;
+                    WARP_STALL[current_warp]   <= 1;
+                    state_curr                 <= REQUESTING;
+                end
+                else if(mem_done) begin
+                    WARP_STALL[warp_id_from_ms] <= 0;
+                end
+                else if(halt) begin
+                    WARP_FINISHED[current_warp]    <= 1;
+                    state_curr                     <= WARP_DONE;
+                end
+                else begin
+                    //update the pc
+                    WARP_PC[current_warp] <= WARP_PC[current_warp] + 1;
+                end
+            end 
+            REQUESTING: begin
+                logic found = 0;
+                for(integer i = 0; i < NUMBER_OF_WARPS; i++) begin
+                    if(WARP_STALL[i] == 0 && found == 0 && WARP_FINISHED[i] == 0 && i != current_warp) begin // and dont increment i after getting a ready warp
+                        current_warp <= i;
+                        state_curr   <= IDLE;
+                        found        = 1;
+                    end
+                end
+                if(mem_done) begin   //if all stalled then wait for mem_done 
+                    WARP_STALL[warp_id_from_ms] <= 0;
+                end
+            end
+            WARP_DONE: begin
+                logic found = 0;
+                for(integer i = 0; i < NUMBER_OF_WARPS; i++) begin
+                    if(WARP_STALL[i] == 0 && found == 0 && WARP_FINISHED[i] == 0 && i != current_warp) begin // and dont increment i after getting a ready warp
+                        current_warp <= i;
+                        state_curr   <= IDLE;
+                        found        = 1;
+                    end
+                end
+                if(mem_done) begin
+                    WARP_STALL[warp_id_from_ms] <= 0;
+                end
+            end
+            default: state_curr <= IDLE;
+        endcase
     end
 end
-    
 
+    assign warp_ready      = WARP_PC[current_warp];
+    assign warp_ready_mask = WARP_MASK[current_warp];
 endmodule
