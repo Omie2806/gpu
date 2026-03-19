@@ -59,6 +59,11 @@ mem_done=1, warp_id=1 → Warp 1 unstalled, marked ready
 Mem scheduler: finds slot 2 → serves Warp 2's SW 
 mem_done=1, warp_id=2 → Warp 2 unstalled, marked ready
 ```
+<img width="1555" height="257" alt="image" src="https://github.com/user-attachments/assets/e681dc34-8091-40d1-9533-4e636100c981" />
+state transition after finishing warp 1's store and setting req_type = 1 for load instruction in warp 1 
+
+<img width="1597" height="256" alt="image" src="https://github.com/user-attachments/assets/8930c43d-8095-4c25-ac64-910b3d54ca21" />
+serving warp 2's store instruction while warp 1 is queued for load
 
 If Warp 1 issues another memory instruction while Warp 2 is being served, it re-enters the queue at slot 1 (now free) and will be served after Warp 2 completes.
 
@@ -66,6 +71,9 @@ If Warp 1 issues another memory instruction while Warp 2 is being served, it re-
 
 For load instructions, the data arrives (around 60 cycles) after the instruction was issued long after the warp scheduler has moved to other warps. The mem_scheduler tracks the destination register (`lw_destination`) per queue slot and signals `lw_ready` + `lw_warp_id` + `lw_destination_out` when load data is ready. This overrides the current instruction's write address (`A3`) and routes `lw_out` to the correct warp's register file regardless of which warp is currently executing.
 
+<img width="1487" height="641" alt="image" src="https://github.com/user-attachments/assets/c13f1471-c7c9-4d83-8a1c-760ab06056ae" />
+
+Values being stored to 9th register of warp 1 after finishing its load service (lw_ready = 1) 
 ---
 
 ## Instruction Set Architecture
