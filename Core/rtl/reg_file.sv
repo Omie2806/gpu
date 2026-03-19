@@ -21,7 +21,7 @@ module reg_file (
             REGISTER[14] <= block_idx;
             REGISTER[15] <= thread_idx;
         end
-        else if((we && reg_en) && (A3 < 13)) begin
+        else if(we && (A3 < 13)) begin
             REGISTER[A3] <= WD;
         end
     end
