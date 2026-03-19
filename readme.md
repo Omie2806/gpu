@@ -100,12 +100,6 @@ For load instructions, the data arrives (around 60 cycles) after the instruction
 
 ---
 
-## Memory Scheduler FSM
-```
-IDLE → WARP → REQ_CHECK → REQ → WAIT → CAPTURE → REQ (next lane)
-                                   ↓ (curr_lane >= 16)
-                                 DONE → IDLE
-```
 
 **Per-lane timing:**
 - Active lane: 3 cycles (REQ → WAIT → CAPTURE)
