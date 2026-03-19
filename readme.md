@@ -2,9 +2,6 @@
 
 **A Multi-Warp Parallel Processing Architecture in SystemVerilog**
 
-![Status](https://img.shields.io/badge/status-fully_functional-brightgreen)
-![Language](https://img.shields.io/badge/language-SystemVerilog-orange)
-
 ---
 
 ## Overview
