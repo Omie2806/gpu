@@ -1,9 +1,8 @@
 # 16-Lane SIMT GPU Core
 
-**A Complete Multi-Warp Parallel Processing Architecture in SystemVerilog**
+**A Multi-Warp Parallel Processing Architecture in SystemVerilog**
 
 ![Status](https://img.shields.io/badge/status-fully_functional-brightgreen)
-![Tests](https://img.shields.io/badge/tests-passing-success)
 ![Language](https://img.shields.io/badge/language-SystemVerilog-orange)
 
 ---
@@ -218,10 +217,4 @@ Synthesize and verify on physical hardware. Current design passes Vivado synthes
 
 ---
 
-## License
-
-MIT License — Open for educational and research use
-
----
-
-**Status:** 4-warp multi-warp execution complete and verified | Branch divergence next
+**Status:** 4-warp multi-warp execution with load/store and basic ops verified, thorough testing still underway 
