@@ -20,6 +20,9 @@ A fully functional **4-warp, 16-lane SIMT GPU** implementing parallel warp execu
 
 ## Architecture Overview
 
+<img width="1475" height="713" alt="image" src="https://github.com/user-attachments/assets/bed8d92e-e0ef-482b-8b48-8f2ddfb44416" />
+
+
 ### Warp Scheduling
 
 Each warp has its own PC and register file. The warp scheduler runs one warp at a time, switching warps when the active warp encounters a memory instruction or executes HALT.
