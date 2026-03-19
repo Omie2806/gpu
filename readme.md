@@ -1,33 +1,75 @@
 # 16-Lane SIMT GPU Core
-**A Complete Parallel Processing Architecture in SystemVerilog**
 
-**Systemverilog**
-**Vivado**
-**Icarus**
----
+**A Complete Multi-Warp Parallel Processing Architecture in SystemVerilog**
 
-## 🎯 Overview
-
-A **fully functional 16-lane SIMT GPU** implementing parallel execution with memory scheduling, active lane masking, and multi-cycle memory operations. This design demonstrates production GPU concepts including divergence infrastructure and thread ID support.
-
--**16 parallel execution lanes** - True SIMT architecture
--**Memory scheduler** - Handles 16 independent memory requests with lane skipping
--**Active masking** - Per-lane enable/disable for divergence support
--**Multi-cycle operations** - PC stalling for memory access
+![Status](https://img.shields.io/badge/status-fully_functional-brightgreen)
+![Tests](https://img.shields.io/badge/tests-passing-success)
+![Language](https://img.shields.io/badge/language-SystemVerilog-orange)
 
 ---
 
+## Overview
 
-## Execution Model
-**Single Instruction, Multiple Threads (SIMT):**
-- All 16 lanes execute the same instruction
-- Each lane operates on different data
-- Memory scheduler handles parallel memory access
-- Active mask controls which lanes write results
+A fully functional **4-warp, 16-lane SIMT GPU** implementing parallel warp execution with a queue-based memory scheduler, per-warp context switching, and independent register files per warp.
+
+**Key capabilities:**
+- 4 independent warps executing concurrently with round-robin LIKE scheduling
+- 16 parallel execution lanes per warp
+- Queue-based memory request scheduler supporting up to 4 simultaneous outstanding memory transactions
+- Per-warp register files full context isolation between warps
+- LW writeback routed to the correct warp's register file regardless of which warp is currently executing
+- Active lane masking for divergence infrastructure
 
 ---
 
-## 📖 Instruction Set Architecture
+## Architecture Overview
+
+### Warp Scheduling
+
+Each warp has its own PC and register file. The warp scheduler runs one warp at a time, switching warps when the active warp encounters a memory instruction or executes HALT.
+```
+For example:
+
+Cycle 1-2:  Warp 0 executes ADD, ADD
+Cycle 3:    Warp 0 hits SW → stall, switch to Warp 1
+Cycle 4-5:  Warp 1 executes ADD, ADD
+Cycle 6:    Warp 1 hits SW → stall, switch to Warp 2
+Cycle 7-N:  Warp 2 executes while Warp 0 and 1 memory runs in background
+Cycle N+1:  Warp 0 memory done → Warp 0 marked ready
+Cycle N+2:  Warp 2 hits HALT → switch to next ready warp (Warp 0)
+```
+
+Warps that are stalled waiting for memory are marked `WARP_STALL=1`. When `mem_done` returns with the completing `warp_id`, that warp is marked ready and will be scheduled again.
+
+### Memory Request Queue
+
+The memory scheduler maintains a 4-slot queue. Each slot stores everything needed to serve the request independently — the warp ID, request type (LW/SW), all 16 lane addresses, and all 16 lane store data. This allows multiple warps to have outstanding memory requests simultaneously.
+
+**Queue admission:**
+When any warp issues LW or SW, `mem_req` pulses for one cycle. At that exact moment while the issuing warp is still active the addresses (`alu_result`) and store data (`RS2`) are captured into the queue slot indexed by `warp_id`.
+
+**Queue service (FIFO by slot index):**
+The memory scheduler scans slots 0 - 3 and serves the first pending slot. This means lower indexed warp IDs get priority when multiple requests are pending. After completing a transaction, the slot is marked unoccupied and `mem_done` pulses with the completed `warp_id` so the warp scheduler can unstall that warp.
+
+**Example with two stalled warps:**
+```
+Warp 1 issues SW → queued in slot 1, warp switches to Warp 2
+Warp 2 issues SW → queued in slot 2, warp switches to Warp 3
+Mem scheduler: finds slot 1 first → serves Warp 1's SW 
+mem_done=1, warp_id=1 → Warp 1 unstalled, marked ready
+Mem scheduler: finds slot 2 → serves Warp 2's SW 
+mem_done=1, warp_id=2 → Warp 2 unstalled, marked ready
+```
+
+If Warp 1 issues another memory instruction while Warp 2 is being served, it re-enters the queue at slot 1 (now free) and will be served after Warp 2 completes.
+
+### LW Writeback
+
+For load instructions, the data arrives (around 60 cycles) after the instruction was issued long after the warp scheduler has moved to other warps. The mem_scheduler tracks the destination register (`lw_destination`) per queue slot and signals `lw_ready` + `lw_warp_id` + `lw_destination_out` when load data is ready. This overrides the current instruction's write address (`A3`) and routes `lw_out` to the correct warp's register file regardless of which warp is currently executing.
+
+---
+
+## Instruction Set Architecture
 
 ### Instruction Format (32-bit)
 ```
@@ -38,176 +80,148 @@ A **fully functional 16-lane SIMT GPU** implementing parallel execution with mem
      16 bits         4 bits    4 bits    4 bits    4 bits
 ```
 
-### Instruction Decoding
-The instruction decoder extracts fields using simple bit slicing:
-```systemverilog
-assign A1     = instr[3:0];      // Rs1 - Source register 1
-assign A2     = instr[7:4];      // Rs2 - Source register 2
-assign A3     = instr[11:8];     // Rd  - Destination register
-assign opcode = instr[15:12];    // 4-bit operation code
-assign imm    = instr[31:16];    // 16-bit immediate value
-```
+### Instruction Set
 
-### Complete Instruction Set
+| Mnemonic | Opcode | Operation |
+|----------|--------|-----------|
+| ADD | 0000 | Rd = Rs1 + Rs2 |
+| SUB | 0001 | Rd = Rs1 - Rs2 |
+| MUL | 0010 | Rd = Rs1 × Rs2 |
+| AND | 0011 | Rd = Rs1 & Rs2 |
+| OR  | 0100 | Rd = Rs1 \| Rs2 |
+| XOR | 0101 | Rd = Rs1 ^ Rs2 |
+| LW  | 0110 | Rd = MEM[Rs1 + imm] |
+| SW  | 0111 | MEM[Rs1 + imm] = Rs2 |
+| HALT| 1000 | End warp execution |
 
-#### R-Type Instructions (Register-Register)
-| Mnemonic | Opcode | Format | Operation | Example |
-|----------|--------|--------|-----------|---------|
-| ADD | 0000 | `ADD Rd, Rs1, Rs2` | Rd = Rs1 + Rs2 | `ADD R3, R1, R2` |
-| SUB | 0001 | `SUB Rd, Rs1, Rs2` | Rd = Rs1 - Rs2 | `SUB R4, R3, R1` |
-| MUL | 0010 | `MUL Rd, Rs1, Rs2` | Rd = Rs1 × Rs2 | `MUL R5, R2, R2` |
-| AND | 0011 | `AND Rd, Rs1, Rs2` | Rd = Rs1 & Rs2 | `AND R6, R1, R2` |
-| OR  | 0100 | `OR  Rd, Rs1, Rs2` | Rd = Rs1 \| Rs2 | `OR  R7, R1, R2` |
-| XOR | 0101 | `XOR Rd, Rs1, Rs2` | Rd = Rs1 ^ Rs2 | `XOR R8, R1, R2` |
+### Special Registers
 
-**Encoding Example:**
-```
-ADD R3, R1, R2 → 32'h0000_0312
-  imm=0x0000, opcode=0x0, Rd=0x3, Rs2=0x1, Rs1=0x2
-```
+| Register | Purpose |
+|----------|---------|
+| R13 | block_dim |
+| R14 | block_idx |
+| R15 | thread_idx (lane index 0-15) |
 
-#### I-Type Instructions (Immediate-based Memory)
-| Mnemonic | Opcode | Format | Operation | Cycles |
-|----------|--------|--------|-----------|--------|
-| LW  | 0110 | `LW  Rd, imm(Rs1)` | Rd = MEM[Rs1 + imm] | 48* |
-| SW  | 0111 | `SW  Rs2, imm(Rs1)` | MEM[Rs1 + imm] = Rs2 | 48* |
-
-*Cycles for all 16 lanes active; fewer if lanes masked
-
-**Memory Addressing:**
-```
-Effective Address = Rs1 + sign_extend(immediate)
-
-Example:
-  LW R9, 0x0100(R0)  →  Load from address 0x0100 + R0
-  SW R3, 0x0050(R1)  →  Store to address 0x0050 + R1
-```
-**Special Registers**
-R13- block_dim
-R14- block_idx
-R15- thread_idx
 ---
 
-## 🔧 Memory Scheduler
-
-The memory scheduler is the core of multi-lane memory access.
-
-### Operation Flow
-
-**State Machine:**
+## Memory Scheduler FSM
 ```
-IDLE → REQ → WAIT → CAPTURE → REQ (next lane) → ... → DONE → IDLE
-         ↓                                                ↑
-    inactive lane? ────── skip (1 cycle) ───────────────┘
+IDLE → WARP → REQ_CHECK → REQ → WAIT → CAPTURE → REQ (next lane)
+                                   ↓ (curr_lane >= 16)
+                                 DONE → IDLE
 ```
 
-**Per-Lane Timing:**
-- **Active lane**: 3 cycles (REQ → WAIT → CAPTURE)
-- **Inactive lane**: 1 cycle (immediate skip)
+**Per-lane timing:**
+- Active lane: 3 cycles (REQ → WAIT → CAPTURE)
+- Inactive lane: 1 cycle skip
+- Full warp (16 active lanes): 48 cycles
 
-```
+---
 
 
-### Example Test Program
+---
+
+## Specifications
+
+| Feature | Value |
+|---------|-------|
+| Warps | 4 |
+| Lanes per warp | 16 |
+| Data width | 16 bits |
+| Instruction width | 32 bits |
+| Registers per lane | 16 |
+| Total register storage | 4 warps × 16 lanes × 16 regs × 16 bits = 16,384 bits |
+| Memory request queue depth | 4 slots |
+| Data memory | 256 × 16-bit words |
+| Instruction memory | 256 × 32-bit words (64 per warp) |
+| ALU operations | 6 |
+
+### Warp Memory Map
+
+| Warp | PC Start | PC End |
+|------|----------|--------|
+| 0 | 0x0000 | 0x000F |
+| 1 | 0x0010 | 0x001F |
+| 2 | 0x0020 | 0x002F |
+| 3 | 0x0030 | 0x003F |
+
+---
+
+## Example Programs
+
+### Vector Add (single warp)
 ```systemverilog
-// Initialize: Each lane gets unique data
-// R1 = thread_id (lane 0→15)
-instr_mem[0] = 32'h0000_010F;  // ADD R1, R15, R0
-
-// R2 = thread_id × 2
-instr_mem[1] = 32'h0000_02FF;  // ADD R2, R15, R15
-
-// Compute: R3 = R1 + R2 = thread_id × 3
-instr_mem[2] = 32'h0000_0312;  // ADD R3, R1, R2
-
-// Store to memory: MEM[base + thread_id] = R3
-instr_mem[3] = 32'h0100_7031;  // SW R3, 0x100(R1)
-
-// Load back: R4 = MEM[base + thread_id]
-instr_mem[4] = 32'h0100_6401;  // LW R4, 0x100(R1)
-
-// Result: Each lane has independent data
-//   Lane 0: R4 = 0
-//   Lane 1: R4 = 3
-//   Lane 5: R4 = 15
-//   Lane 15: R4 = 45
+// Each lane computes A[i] + B[i] = C[i]
+// R15 = thread_idx (lane index)
+instr_mem[0] = 32'h0100_610F; // LW R1, 0x0100(R15)  load A[i]
+instr_mem[1] = 32'h0200_620F; // LW R2, 0x0200(R15)  load B[i]
+instr_mem[2] = 32'h0000_0312; // ADD R3, R1, R2       C[i] = A[i]+B[i]
+instr_mem[3] = 32'h0300_730F; // SW R3, 0x0300(R15)  store C[i]
+instr_mem[4] = 32'h0000_8000; // HALT
 ```
 
-### Running Tests
+### Multi-warp store-load roundtrip (verified)
+```systemverilog
+// Warp 0: ALU operations across all lanes
+instr_mem[0]  = 32'h0000_010F; // R1 = thread_idx
+instr_mem[1]  = 32'h0000_02FF; // R2 = thread_idx * 2
+instr_mem[2]  = 32'h0000_0312; // R3 = R1 + R2
+instr_mem[8]  = 32'h0000_8000; // HALT
+
+// Warp 1: Store then load roundtrip
+instr_mem[16] = 32'h0000_010F; // R1 = thread_idx
+instr_mem[17] = 32'h0100_701F; // SW R1, 0x0100(R15)
+instr_mem[18] = 32'h0100_690F; // LW R9, 0x0100(R15)  R9 should = R1
+instr_mem[21] = 32'h0000_8000; // HALT
+```
+
+---
+
+## Running Simulation
 ```bash
-# Compile
-iverilog -g2012 -o gpu_sim tb_gpu_top.sv gpu_top.sv *.sv
+# Vivado (recommended)
+# Add all .sv files as design sources
+# Add tb_gpu_top.sv as simulation source
+# Run Behavioral Simulation
 
-# Run
+# Icarus Verilog
+iverilog -g2012 -o gpu_sim tb_gpu_top.sv gpu_top.sv mem_scheduler.sv \
+         warp_scheduler.sv reg_file.sv alu.sv instr_mem.sv data_mem.sv imm_gen.sv
 vvp gpu_sim
-
-# View waveforms
 gtkwave gpu.vcd
 ```
 
 ---
 
+## Future Work
 
-## 📊 Specifications
+**Branch Divergence**
+Add BEQ/BNE instructions with a divergence stack to handle conditional branches where different lanes take different paths. Requires a masker module and reconvergence logic.
 
-| Feature | Value |
-|---------|-------|
-| **Architecture** | 16-lane SIMT |
-| **Data Width** | 16 bits |
-| **Instruction Width** | 32 bits |
-| **Registers per Lane** | 16 × 16-bit |
-| **Total Registers** | 256 (16 lanes × 16 regs) |
-| **ALU Operations** | 6 (ADD, SUB, MUL, AND, OR, XOR) |
-| **Data Memory** | 256 × 16-bit words |
-| **Instruction Memory** | Configurable (tested 256 words) |
-| **Memory Scheduler** | 5-state FSM with lane skipping |
-| **Thread ID Support** | R15 = lane index (0-15) |
-| **Active Masking** | 16-bit mask per instruction |
+**Memory Coalescing**
+Detect when consecutive lanes access consecutive addresses and merge into a single burst transaction — reducing 48 cycles to 1 burst for sequential access patterns.
 
-### Performance Characteristics
-- **R-Type instruction**: 1 cycle
-- **Memory operation**: 3-48 cycles (depends on active lanes)
-- **Lane skip penalty**: 1 cycle (inactive lanes)
-- **PC stall**: Automatic during memory ops
+**Round-Robin Fairness**
+Current queue always serves lowest-index slot first. True round-robin would give equal priority to all warps regardless of their ID.
+
+**FPGA Implementation**
+Synthesize and verify on physical hardware. Current design passes Vivado synthesis on Kintex-7 (xc7k70t) with 4864 flip-flops utilized.
 
 ---
 
-##  Future Work
+## References
 
-### Phase 1: Branch Divergence (Next Priority)
-Add true divergence handling for conditional branches:
-
-**Components:**
-- **Branch instructions** (BEQ, BNE)
-- **Divergence stack** (8 entries: PC + mask pairs)
-- **Masker module** (detects when lanes take different paths)
-- **Reconvergence logic** (merge lanes back together)
-
-
-### Phase 2: Memory Coalescing
-Optimize sequential memory access:
-- Detect when lanes access consecutive addresses
-- Combine into burst transactions
-- Reduce cycles from 16×3 to 1×burst for sequential access
-
-### Phase 3: FPGA Implementation
----
-
-
-## 🔗 References
-
-- **Tiny-GPU**
-- **NVIDIA's SIMT Architecture**: GTC presentations and whitepapers
-- **Programming Massively Parallel Processors by Hwu and Kiwi**
-- **General Purpose Graphics Processor Architectures**
-- **Nvidia Cuda Programming Guide**
----
-
-
-## 📝 License
-
-MIT License - Open for educational and research use
+- Tiny-GPU (architectural reference)
+- NVIDIA SIMT Architecture — GTC whitepapers
+- Programming Massively Parallel Processors — Hwu and Kirk
+- General Purpose Graphics Processor Architectures — Aamodt, Fung, Rogers
 
 ---
 
-**Status:** 16-lane implementation complete  | Branch divergence next 
+## License
+
+MIT License — Open for educational and research use
+
+---
+
+**Status:** 4-warp multi-warp execution complete and verified | Branch divergence next
