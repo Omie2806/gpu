@@ -1,3 +1,4 @@
+//no more in use, work done by warp scheduler
 module pc (
     input logic          clk,
     input logic          reset,
