@@ -192,13 +192,13 @@ gtkwave gpu.vcd
 Add BEQ/BNE instructions with a divergence stack to handle conditional branches where different lanes take different paths. Requires a masker module and reconvergence logic.
 
 **Memory Coalescing**
-Detect when consecutive lanes access consecutive addresses and merge into a single burst transaction — reducing 48 cycles to 1 burst for sequential access patterns.
+Detect when consecutive lanes access consecutive addresses and merge into a single burst transaction — reducing approx 60 cycles to 1 burst for sequential access patterns.
 
 **Round-Robin Fairness**
 Current queue always serves lowest-index slot first. True round-robin would give equal priority to all warps regardless of their ID.
 
 **FPGA Implementation**
-Synthesize and verify on physical hardware. Current design passes Vivado synthesis on Kintex-7 (xc7k70t) with 4864 flip-flops utilized.
+Synthesize and verify on physical hardware. 
 
 ---
 
