@@ -101,14 +101,6 @@ For load instructions, the data arrives (around 60 cycles) after the instruction
 ---
 
 
-**Per-lane timing:**
-- Active lane: 3 cycles (REQ → WAIT → CAPTURE)
-- Inactive lane: 1 cycle skip
-- Full warp (16 active lanes): 48 cycles
-
----
-
-
 ---
 
 ## Specifications
