@@ -7,6 +7,7 @@
 ## Overview
 
 A fully functional **4-warp, 16-lane SIMT GPU** implementing parallel warp execution with a queue-based memory scheduler, per-warp context switching, and independent register files per warp.
+Synthesized and implemented on Artix-7 XC7A35T with 22,334 FFs, 4,902 LUTs, timing closure at 100MHz.
 
 **Key capabilities:**
 - 4 independent warps executing concurrently with round-robin LIKE scheduling
@@ -199,7 +200,7 @@ Detect when consecutive lanes access consecutive addresses and merge into a sing
 Current queue always serves lowest-index slot first. True round-robin would give equal priority to all warps regardless of their ID.
 
 **FPGA Implementation**
-Synthesize and verify on physical hardware. 
+Deploy and verify on physical hardware. 
 
 ---
 
