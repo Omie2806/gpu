@@ -45,8 +45,8 @@ initial begin
 
 //warp 1
     dut.instr_inst.instr_mem[16] = 32'h0000_010F; // ADD R1, R15, R0
-    dut.instr_inst.instr_mem[17] = 32'h0100_701F; // SW  R1, 0x0100(R0)
-    dut.instr_inst.instr_mem[18] = 32'h0100_690F; // LW  R9, 0x0100(R0)
+    dut.instr_inst.instr_mem[17] = 32'h0100_701F; // SW  R1, 0x0100(R15)
+    dut.instr_inst.instr_mem[18] = 32'h0100_690F; // LW  R9, 0x0100(R15)
     dut.instr_inst.instr_mem[19] = 32'h0000_2522; // MUL R5, R2, R2
     dut.instr_inst.instr_mem[20] = 32'h0000_3621; // AND R6, R1, R2
     dut.instr_inst.instr_mem[21] = 32'h0000_8000; // HALT
