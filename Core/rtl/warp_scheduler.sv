@@ -1,33 +1,42 @@
 module warp_scheduler #(
-    parameter NUMBER_OF_WARPS = 4
+    parameter NUMBER_OF_WARPS   = 4,
+    parameter ADDR_WIDTH        = 16,
+    parameter DATA_WIDTH        = 16,
+    parameter NUMBER_OF_THREADS = 16
 ) (
     input logic         clk, 
     input logic         reset,
-    // input logic[15 : 0] warp_mask, //initialize 
-    // input logic[15 : 0] warp_pc,  //initialize
+    input logic         branch,//tell if there is a branch instruction comes from the contrl unit
+    input logic         zero, //for beq and comes from the alu
+    input logic         less_than,
+    input logic         jump,
+    input logic[15 : 0] imm_out,//immediate to add with the pc for branch instruction 
+    input logic[NUMBER_OF_THREADS - 1 : 0] warp_mask [0 : NUMBER_OF_WARPS - 1], //initialize 
+    input logic[ADDR_WIDTH - 1 : 0] warp_pc [0 : NUMBER_OF_WARPS - 1],  //initialize
     input logic         mem_req, //from top check from opcode
     input logic         mem_done, //from mem_scheduler
     input logic         halt, //from top
-    input logic[1 : 0]  warp_id_from_ms, //to memory_scheduler
+    input logic[$clog2(NUMBER_OF_WARPS) - 1 : 0]  warp_id_from_ms, //to memory_scheduler
 
-    output logic[1 : 0]  warp_id_to_ms, //from memory_scheduler
-    output logic[15 : 0] warp_ready, //pc of ready warp
-    output logic[15 : 0] warp_ready_mask,
+    output logic[$clog2(NUMBER_OF_WARPS) - 1 : 0]  warp_id_to_ms, //from memory_scheduler
+    output logic[ADDR_WIDTH - 1 : 0] warp_ready, //pc of ready warp
+    output logic[NUMBER_OF_THREADS - 1 : 0] warp_ready_mask,
     // output logic         done
-    output logic[1 : 0] current_warp_id
+    output logic[$clog2(NUMBER_OF_WARPS) - 1 : 0] current_warp_id
 );
 
-reg[1 : 0] current_warp;
+reg[$clog2(NUMBER_OF_WARPS) - 1: 0] current_warp;
 
 //warp table
-reg[15 : 0] WARP_PC  [0 : NUMBER_OF_WARPS - 1];
-reg[15 : 0] WARP_MASK[0 : NUMBER_OF_WARPS - 1];
+reg[ADDR_WIDTH - 1 : 0] WARP_PC  [0 : NUMBER_OF_WARPS - 1];
+reg[NUMBER_OF_THREADS - 1 : 0] WARP_MASK[0 : NUMBER_OF_WARPS - 1];
 
 reg WARP_STALL    [0 : NUMBER_OF_WARPS - 1];
 reg WARP_FINISHED [0 : NUMBER_OF_WARPS - 1];
 
 typedef enum logic [2 : 0] {
     IDLE            = 3'b000,
+    // FETCH           = 3'b001,
     REQUESTING      = 3'b001,
     WARP_DONE       = 3'b010
 } state_t;
@@ -36,23 +45,24 @@ state_t state_curr;
 
 logic pc_en;
 
-
 always_ff @(posedge clk) begin
     if(reset) begin
         for(integer i = 0; i < NUMBER_OF_WARPS; i++) begin
             WARP_STALL[i]    <= 0;
             WARP_FINISHED[i] <= 0;
-            WARP_MASK[i]     <= 16'hFFFF;  
+            WARP_MASK[i]     <= warp_mask[i];  //will set mask and pcs when reset is active
+            WARP_PC[i]       <= warp_pc[i];
         end
         current_warp       <= 2'b00;
         state_curr         <= IDLE;
-        warp_id_to_ms      <= 2'b00;
         pc_en              <= 0;
-
-        WARP_PC[0] <= 16'h0000;  // starts at 0  runs until HALT
-        WARP_PC[1] <= 16'h0010;  // starts at 16 runs until HALT
-        WARP_PC[2] <= 16'h0020;  // starts at 32 runs until HALT
-        WARP_PC[3] <= 16'h0030;  // starts at 48 runs until HALT
+        //ill now have to extend each warps instruction storage size due to branch instructions 
+        //also ill make each warp instr buffer size dynamic(receive it from the compiler)
+        //and the mask too
+        // WARP_PC[0] <= 16'h0000;  // starts at 0  runs until HALT
+        // WARP_PC[1] <= 16'h0010;  // starts at 16 runs until HALT
+        // WARP_PC[2] <= 16'h0020;  // starts at 32 runs until HALT
+        // WARP_PC[3] <= 16'h0030;  // starts at 48 runs until HALT
     end
     else begin
         case (state_curr)
@@ -68,7 +78,10 @@ always_ff @(posedge clk) begin
                     WARP_FINISHED[current_warp]    <= 1;
                     state_curr                     <= WARP_DONE;
                 end
-                else if(pc_en)begin
+                else if((pc_en && branch && zero) || (pc_en && branch && less_than) || (pc_en && jump)) begin
+                    WARP_PC[current_warp] <= WARP_PC[current_warp] + imm_out;
+                end
+                else if(pc_en) begin
                     //update the pc
                     WARP_PC[current_warp] <= WARP_PC[current_warp] + 1;
                 end
