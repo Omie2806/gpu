@@ -3,7 +3,8 @@ module alu (
     input logic[15:0] B,
     input logic[3:0] alu_control,
     output logic[15:0]  alu_result,
-    output logic zero
+    output logic zero,
+    output logic less_than
 );
 
 always @(*) begin
@@ -18,6 +19,7 @@ always @(*) begin
     endcase
 end
 
-assign zero = (alu_result == 16'h0000);
+assign zero      = (alu_result == 16'h0000);
+assign less_than = (alu_result[15] == 1);
     
 endmodule
