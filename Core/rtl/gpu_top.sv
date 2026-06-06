@@ -21,8 +21,10 @@ logic[$clog2(NUMBER_OF_WARPS) - 1 : 0] warp_id_to_ms;
 logic[$clog2(NUMBER_OF_WARPS) - 1 : 0] current_warp_id;
 logic[ADDR_WIDTH - 1 : 0] warp_ready;
 logic[NUMBER_OF_THREADS - 1 : 0] warp_ready_mask;
-logic branch; //for branch instruction
+logic branch_eq; //for branch equal instruction
+logic branch_lt; //for branch less than instruction
 logic jump; //unconditional jump
+logic[15 : 0] reconverge_pc;
 
 warp_scheduler #(
     .NUMBER_OF_THREADS(NUMBER_OF_THREADS),
@@ -34,11 +36,13 @@ warp_scheduler #(
     .reset(reset),
     .mem_req(mem_req),
     .mem_done(mem_done),
-    .zero(zero[0]), //for now no divergence (im using this for testing only will get all alu results as 0)
-    .less_than(less_than[0]), //same for now i assume no divergence
-    .branch(branch),
+    .zero(zero), //for now no divergence (im using this for testing only will get all alu results as 0)
+    .less_than(less_than), //same for now i assume no divergence
+    .branch_eq(branch_eq),
+    .branch_lt(branch_lt),
     .jump(jump), //all active threads will jump no conditions 
     .imm_out(imm_out),
+    .reconverge_pc(reconverge_pc),
     .halt(halt),
     .warp_id_from_ms(warp_id_from_ms),
     .warp_pc(warp_pc),
@@ -83,8 +87,8 @@ logic [DATA_WIDTH - 1 : 0] RS2 [0 : NUMBER_OF_THREADS - 1];
 logic [DATA_WIDTH - 1 : 0] alu_result[0 : NUMBER_OF_THREADS - 1];
 // control path
 logic [3 : 0]  alu_control;
-logic zero [0 : NUMBER_OF_THREADS - 1];
-logic less_than [0 : NUMBER_OF_THREADS - 1];
+logic[0 : NUMBER_OF_THREADS - 1] zero;
+logic[0 : NUMBER_OF_THREADS - 1] less_than;
 
 logic[DATA_WIDTH - 1 : 0] result_source_mux [0 : NUMBER_OF_THREADS - 1];
 logic[DATA_WIDTH - 1 : 0] result_source_mux_warps [0 : NUMBER_OF_WARPS - 1][0 : NUMBER_OF_THREADS - 1];
@@ -135,7 +139,12 @@ endgenerate
     genvar k;
     generate
         for(k = 0; k < NUMBER_OF_THREADS; k++)begin
-        alu alu_inst (
+        alu #(
+            .NUMBER_OF_THREADS(NUMBER_OF_THREADS),
+            .NUMBER_OF_WARPS(NUMBER_OF_WARPS),
+            .ADDR_WIDTH(ADDR_WIDTH),
+            .DATA_WIDTH(DATA_WIDTH)
+        ) alu_inst (
             .A(RS1[k]),
             .B(alu_source_mux[k]),
             .alu_result(alu_result[k]),
@@ -225,7 +234,8 @@ always @(*) begin
     alu_control = 4'b0000;
     halt        = 0;
     result_source = 0;
-    branch = 0;
+    branch_eq = 0;
+    branch_lt = 0;
     jump = 0;
     case (opcode)
         4'b0000: begin //add
@@ -294,13 +304,13 @@ always @(*) begin
         4'b1010: begin //beq
             alu_source = 0;
             alu_control = 4'b0001;
-            branch = 1;
+            branch_eq = 1;
             reg_en = 1;
         end
         4'b1011: begin //blt
             alu_source = 0;
             alu_control = 4'b0001;
-            branch = 1;
+            branch_lt = 1;
             reg_en = 1;
         end
         4'b1100: begin //jump
@@ -342,6 +352,9 @@ assign imm = instr[31 : 16];
 
 imm_gen imm_inst (
     .imm(imm),
+    .branch(branch_eq || branch_lt),
+    .jump(jump),
+    .reconverge_pc(reconverge_pc),
     .imm_out(imm_out)
 );
 
