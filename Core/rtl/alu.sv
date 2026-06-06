@@ -1,4 +1,9 @@
-module alu (
+module alu #(
+    parameter NUMBER_OF_WARPS   = 4,
+    parameter ADDR_WIDTH        = 16,
+    parameter DATA_WIDTH        = 16,
+    parameter NUMBER_OF_THREADS = 16
+) (
     input logic[15:0] A,
     input logic[15:0] B,
     input logic[3:0] alu_control,
