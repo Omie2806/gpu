@@ -98,7 +98,7 @@ always_ff @(posedge clk) begin
                     WARP_FINISHED[current_warp]    <= 1;
                     state_curr                     <= WARP_DONE;
                 end
-                else if(pc_en && branch_eq) begin
+                else if(pc_en && branch_eq && (&zero == 0)) begin
                     if(BRANCH_VALID[current_warp][stack_pointer[current_warp] + 1] == 0) begin
                         //taken branch
                         WARP_PC[current_warp][stack_pointer[current_warp] + 1] <= WARP_PC[current_warp][stack_pointer[current_warp]] + imm_out;
@@ -114,15 +114,15 @@ always_ff @(posedge clk) begin
                         BRANCH_VALID[current_warp][stack_pointer[current_warp] + 2] <= 1;
                     end
                     for(integer i = 0; i < NUMBER_OF_THREADS; i++) begin
-                        WARP_MASK[current_warp][stack_pointer[current_warp] + 1][i] <= (zero[i] && (WARP_MASK[current_warp][stack_pointer[current_warp]][i]) == 1);
+                        WARP_MASK[current_warp][stack_pointer[current_warp] + 1][i] <= (zero[i] & (WARP_MASK[current_warp][stack_pointer[current_warp]][i]));
                     end
                     for(integer i = 0; i < NUMBER_OF_THREADS; i++) begin
-                        WARP_MASK[current_warp][stack_pointer[current_warp] + 2][i] <= (!zero[i] && (WARP_MASK[current_warp][stack_pointer[current_warp]][i]) == 1);
+                        WARP_MASK[current_warp][stack_pointer[current_warp] + 2][i] <= (!zero[i] & (WARP_MASK[current_warp][stack_pointer[current_warp]][i]));
                     end
 
                     stack_pointer[current_warp] <= stack_pointer[current_warp] + 2;
                 end
-                else if(pc_en && branch_lt) begin
+                else if(pc_en && branch_lt && (&less_than == 0)) begin
                     if(BRANCH_VALID[current_warp][stack_pointer[current_warp] + 1] == 0) begin
                         //taken branch
                         WARP_PC[current_warp][stack_pointer[current_warp] + 1] <= WARP_PC[current_warp][stack_pointer[current_warp]] + imm_out;
@@ -139,10 +139,10 @@ always_ff @(posedge clk) begin
                     end
 
                     for(integer i = 0; i < NUMBER_OF_THREADS; i++) begin
-                        WARP_MASK[current_warp][stack_pointer[current_warp] + 1][i] <= less_than[i];
+                        WARP_MASK[current_warp][stack_pointer[current_warp] + 1][i] <= less_than[i] & (WARP_MASK[current_warp][stack_pointer[current_warp]][i]);
                     end
                     for(integer i = 0; i < NUMBER_OF_THREADS; i++) begin
-                        WARP_MASK[current_warp][stack_pointer[current_warp] + 2][i] <= !less_than[i];
+                        WARP_MASK[current_warp][stack_pointer[current_warp] + 2][i] <= !less_than[i] & (WARP_MASK[current_warp][stack_pointer[current_warp]][i]);
                     end
 
                     stack_pointer[current_warp] <= stack_pointer[current_warp] + 2;                    
