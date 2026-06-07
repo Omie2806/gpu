@@ -1,4 +1,4 @@
-# 16-Lane SIMT GPU Core
+# A multi-warp SIMT GPU core with branch divergence handling 
 
 **A Multi-Warp Parallel Processing Architecture in SystemVerilog**
 
@@ -6,15 +6,15 @@
 
 ## Overview
 
-A fully functional **4-warp, 16-lane SIMT GPU** implementing parallel warp execution with a queue-based memory scheduler, per-warp context switching, and independent register files per warp.
+A fully functional **4-warp, 16-lane SIMT GPU** implementing parallel warp execution with branch divergence stack(IPDOM), a queue-based memory scheduler, per-warp context switching, and independent register files per warp.
 
 **Key capabilities:**
 - 4 independent warps executing concurrently with round-robin LIKE scheduling
+- 8 stack registers per warp for divergent branches with masking
 - 16 parallel execution lanes per warp
 - Queue-based memory request scheduler supporting up to 4 simultaneous outstanding memory transactions
 - Per-warp register files full context isolation between warps
 - LW writeback routed to the correct warp's register file regardless of which warp is currently executing
-- Active lane masking for divergence infrastructure
 
 ---
 
@@ -41,6 +41,13 @@ Cycle N+2:  Warp 2 hits HALT → switch to next ready warp (Warp 0)
 ```
 
 Warps that are stalled waiting for memory are marked `WARP_STALL=1`. When `mem_done` returns with the completing `warp_id`, that warp is marked ready and will be scheduled again.
+
+### Divergence Stack(IPDOM for branch divergence)
+The divergence stack supports 8 registers per warp for branching PCs. Pushes the 'taken' branch and then the 'not taken' branch at the top.
+Reconvergence PC(Immediate Post Dominator offset) is given in the branch instruction. A jump instruction 'jumps' to the reconvergent pc ones that block is executed. From that point onwards, all threads run parallely again or with the parent's mask(nested control flow)
+
+<img width="1364" height="579" alt="image" src="https://github.com/user-attachments/assets/23b035e7-9ab8-4f6b-aff3-a46ebd9e36ba" />
+
 
 ### Memory Request Queue
 
