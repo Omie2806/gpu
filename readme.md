@@ -20,7 +20,8 @@ A fully functional **4-warp, 16-lane SIMT GPU** implementing parallel warp execu
 
 ## Architecture Overview
 
-<img width="1325" height="639" alt="image" src="https://github.com/user-attachments/assets/4df6cad0-1443-41f0-a3ec-0ec1986bae05" />
+<img width="1167" height="731" alt="image" src="https://github.com/user-attachments/assets/940607cc-7d75-46d9-af11-16f6512dfcd4" />
+
 
 
 
