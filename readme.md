@@ -206,7 +206,7 @@ Deploy and verify on physical hardware.
 - NVIDIA SIMT Architecture — GTC whitepapers
 - Programming Massively Parallel Processors — Hwu and Kirk
 - General Purpose Graphics Processor Architectures — Aamodt, Fung, Rogers
-- IPDOM stack paper, 2007
+- W.W.L. Fung, I. Sham, G. Yuan, T. Aamodt — Dynamic Warp Formation and Scheduling for Efficient GPU Control Flow, MICRO 2007
 
 ---
 
