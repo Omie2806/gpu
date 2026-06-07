@@ -138,8 +138,8 @@ For jump, blt and beq instructions, immediate is from [31 : 24] and reconvergenc
 | XOR | 0101 | Rd = Rs1 ^ Rs2 |
 | LW  | 0110 | Rd = MEM[Rs1 + imm] |
 | SW  | 0111 | MEM[Rs1 + imm] = Rs2 |
-| BEQ  | 1010 | pc + imm | Rs1 - Rs2
-| BLT  | 1011 | pc + imm | Rs1 - Rs2
+| BEQ  | 1010 | pc + imm,  Rs1 - Rs2 |
+| BLT  | 1011 | pc + imm,  Rs1 - Rs2 |
 | JUMP | 1100 | pc + imm |
 | HALT| 1111 | End warp execution |
 
