@@ -48,6 +48,31 @@ Reconvergence PC(Immediate Post Dominator offset) is given in the branch instruc
 
 <img width="1364" height="579" alt="image" src="https://github.com/user-attachments/assets/23b035e7-9ab8-4f6b-aff3-a46ebd9e36ba" />
 
+**Example:
+```
+   dut.instr_inst.instr_mem[100] = 32'h0000_010F; // ADD R1, R15, R0
+   dut.instr_inst.instr_mem[101] = 32'h0006_8200; // ADDI R2, imm = 6, R0 
+   dut.instr_inst.instr_mem[102] = 32'h0B0E_B021; // BLT R1, R2 (recon = pc + 16, imm = 9)
+   dut.instr_inst.instr_mem[103] = 32'h0007_8300; // ADDI R3, IMM = 5, R0
+   dut.instr_inst.instr_mem[104] = 32'h0000_040F; // ADD R4, R15, R0
+   dut.instr_inst.instr_mem[105] = 32'h0406_B043; // BLT R3, R4 (recon = pc + 6, imm = 3)
+   dut.instr_inst.instr_mem[106] = 32'h0000_050F; // ADD R5, R15, R0
+   dut.instr_inst.instr_mem[107] = 32'h0000_060F; // ADD R6, R15, R0 
+   dut.instr_inst.instr_mem[108] = 32'h0300_C000; // JUMP R7, R15, R0 (imm 1st nest) 
+   dut.instr_inst.instr_mem[109] = 32'h0000_080F; // ADD R8, R15, R0 
+   dut.instr_inst.instr_mem[110] = 32'h0000_090F; // ADD R9, R15, R0 
+   dut.instr_inst.instr_mem[111] = 32'h0000_0A0F; // ADD R10, R15, R0 (recon 1st nest)
+   dut.instr_inst.instr_mem[112] = 32'h0400_C000; // JUMP 0x04 
+   dut.instr_inst.instr_mem[113] = 32'h0000_0C0F; // ADD R12, R15, R0 
+   dut.instr_inst.instr_mem[114] = 32'h0000_010F; // ADD R1, R15, R0 
+   dut.instr_inst.instr_mem[115] = 32'h0000_020F; // ADD R2, R15, R0  
+   dut.instr_inst.instr_mem[116] = 32'h0110_030F; // ADD R3, R15, R0
+```
+Two BLT instructions are nested, the outer branch at PC=102 splits all 16 threads based on whether thread_idx < 6, sending threads 0-5 to the reconverge point directly while threads 6-15 continue into a second BLT at PC=105 that further splits them based on thread_idx > 7. This creates two active divergence levels on the stack simultaneously, with the inner masks correctly ANDed against the outer active mask so threads 0-5 can never be reactivated by the inner branch. Both levels reconverge in order inner first at PC=111, outer at PC=116 and then restoring the full 16-thread active mask.
+
+**Mask example
+<img width="1334" height="176" alt="image" src="https://github.com/user-attachments/assets/c7cb648b-886b-42fd-a0a7-985040a84563" />
+
 
 ### Memory Request Queue
 
@@ -76,6 +101,8 @@ serving warp 2's store instruction while warp 1 is queued for load
 
 If Warp 1 issues another memory instruction while Warp 2 is being served, it re-enters the queue at slot 1 (now free) and will be served after Warp 2 completes.
 
+Warp 0 and 1 test load/store with masking for divergent branches.
+
 ### LW Writeback
 
 For load instructions, the data arrives (around 60 cycles) after the instruction was issued long after the warp scheduler has moved to other warps. The mem_scheduler tracks the destination register (`lw_destination`) per queue slot and signals `lw_ready` + `lw_warp_id` + `lw_destination_out` when load data is ready. This overrides the current instruction's write address (`A3`) and routes `lw_out` to the correct warp's register file regardless of which warp is currently executing.
@@ -95,12 +122,15 @@ Values being stored to 9th register of warp 1 after finishing its load service (
 └─────────────────┴──────────┴─────────┴─────────┴─────────┘
      16 bits         4 bits    4 bits    4 bits    4 bits
 ```
+For jump, blt and beq instructions, immediate is from [31 : 24] and reconvergence pc(not for jump) is from [23 : 16]
 
 ### Instruction Set
 
 | Mnemonic | Opcode | Operation |
 |----------|--------|-----------|
 | ADD | 0000 | Rd = Rs1 + Rs2 |
+| ADDI | 1000 | Rd = Rs1 + Rs2 |
+| SUBI | 1001 | Rd = Rs1 - Rs2 |
 | SUB | 0001 | Rd = Rs1 - Rs2 |
 | MUL | 0010 | Rd = Rs1 × Rs2 |
 | AND | 0011 | Rd = Rs1 & Rs2 |
@@ -108,7 +138,10 @@ Values being stored to 9th register of warp 1 after finishing its load service (
 | XOR | 0101 | Rd = Rs1 ^ Rs2 |
 | LW  | 0110 | Rd = MEM[Rs1 + imm] |
 | SW  | 0111 | MEM[Rs1 + imm] = Rs2 |
-| HALT| 1000 | End warp execution |
+| BEQ  | 1010 | pc + imm | Rs1 - Rs2
+| BLT  | 1011 | pc + imm | Rs1 - Rs2
+| JUMP | 1100 | pc + imm |
+| HALT| 1111 | End warp execution |
 
 ### Special Registers
 
@@ -138,44 +171,7 @@ Values being stored to 9th register of warp 1 after finishing its load service (
 | Instruction memory | 256 × 32-bit words (64 per warp) |
 | ALU operations | 6 |
 
-### Warp Memory Map
 
-| Warp | PC Start | PC End |
-|------|----------|--------|
-| 0 | 0x0000 | 0x000F |
-| 1 | 0x0010 | 0x001F |
-| 2 | 0x0020 | 0x002F |
-| 3 | 0x0030 | 0x003F |
-
----
-
-## Example Programs
-
-### Vector Add (single warp)
-```systemverilog
-// Each lane computes A[i] + B[i] = C[i]
-// R15 = thread_idx (lane index)
-instr_mem[0] = 32'h0100_610F; // LW R1, 0x0100(R15)  load A[i]
-instr_mem[1] = 32'h0200_620F; // LW R2, 0x0200(R15)  load B[i]
-instr_mem[2] = 32'h0000_0312; // ADD R3, R1, R2       C[i] = A[i]+B[i]
-instr_mem[3] = 32'h0300_730F; // SW R3, 0x0300(R15)  store C[i]
-instr_mem[4] = 32'h0000_8000; // HALT
-```
-
-### Multi-warp store-load roundtrip (verified)
-```systemverilog
-// Warp 0: ALU operations across all lanes
-instr_mem[0]  = 32'h0000_010F; // R1 = thread_idx
-instr_mem[1]  = 32'h0000_02FF; // R2 = thread_idx * 2
-instr_mem[2]  = 32'h0000_0312; // R3 = R1 + R2
-instr_mem[8]  = 32'h0000_8000; // HALT
-
-// Warp 1: Store then load roundtrip
-instr_mem[16] = 32'h0000_010F; // R1 = thread_idx
-instr_mem[17] = 32'h0100_701F; // SW R1, 0x0100(R15)
-instr_mem[18] = 32'h0100_690F; // LW R9, 0x0100(R15)  R9 should = R1
-instr_mem[21] = 32'h0000_8000; // HALT
-```
 
 ---
 
@@ -186,19 +182,12 @@ instr_mem[21] = 32'h0000_8000; // HALT
 # Add tb_gpu_top.sv as simulation source
 # Run Behavioral Simulation
 
-# Icarus Verilog
-iverilog -g2012 -o gpu_sim tb_gpu_top.sv gpu_top.sv mem_scheduler.sv \
-         warp_scheduler.sv reg_file.sv alu.sv instr_mem.sv data_mem.sv imm_gen.sv
-vvp gpu_sim
-gtkwave gpu.vcd
 ```
 
 ---
 
 ## Future Work
 
-**Branch Divergence**
-Add BEQ/BNE instructions with a divergence stack to handle conditional branches where different lanes take different paths. Requires a masker module and reconvergence logic.
 
 **Memory Coalescing**
 Detect when consecutive lanes access consecutive addresses and merge into a single burst transaction — reducing approx 60 cycles to 1 burst for sequential access patterns.
@@ -217,7 +206,7 @@ Deploy and verify on physical hardware.
 - NVIDIA SIMT Architecture — GTC whitepapers
 - Programming Massively Parallel Processors — Hwu and Kirk
 - General Purpose Graphics Processor Architectures — Aamodt, Fung, Rogers
+- IPDOM stack paper, 2007
 
 ---
 
-**Status:** 4-warp multi-warp execution with load/store and basic ops verified, thorough testing still underway 
