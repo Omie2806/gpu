@@ -55,10 +55,10 @@ initial begin
    dut.instr_inst.instr_mem[2]  = 32'h0001_830F; // ADDI R3, imm = 1,  R15
    dut.instr_inst.instr_mem[3]  = 32'h0000_243F; // MUL R4, R15, R3
    dut.instr_inst.instr_mem[4]  = 32'h0004_850F; // ADDI R5, imm = 2,  R0
-   dut.instr_inst.instr_mem[5]  = 32'h0607_A054; // BEQ R4,  R5 (reconv at [11])
+   dut.instr_inst.instr_mem[5]  = 32'h0407_A054; // BEQ R4,  R5 (reconv at [11])
    dut.instr_inst.instr_mem[6]  = 32'h0000_4721; // OR  R7, R1,  R2
    dut.instr_inst.instr_mem[7]  = 32'h0000_5821; // XOR R8, R1,  R2
-   dut.instr_inst.instr_mem[8]  = 32'h0100_C000; // JUMP 0x0001 + pc(test only to verify proper jump signal)
+   dut.instr_inst.instr_mem[8]  = 32'h0400_C000; // JUMP 0x0004 + pc(jump to reconv)
 
    dut.instr_inst.instr_mem[9]   = 32'h0000_090F; // ADD R9, R15, R0 (warp 1 will continue from here)
    dut.instr_inst.instr_mem[10]  = 32'h0120_701F; // SW  R9, 0x0120(R15) (2nd thread shouldnt store)
@@ -85,7 +85,7 @@ initial begin
    dut.instr_inst.instr_mem[100] = 32'h0000_010F; // ADD R1, R15, R0
    dut.instr_inst.instr_mem[101] = 32'h0006_8200; // ADDI R2, imm = 6, R0 
    dut.instr_inst.instr_mem[102] = 32'h0B0E_B021; // BLT R1, R2 (recon = pc + 16, imm = 9)
-   dut.instr_inst.instr_mem[103] = 32'h0003_8300; // ADDI R3, IMM = 3, R0
+   dut.instr_inst.instr_mem[103] = 32'h0007_8300; // ADDI R3, IMM = 5, R0
    dut.instr_inst.instr_mem[104] = 32'h0000_040F; // ADD R4, R15, R0
    dut.instr_inst.instr_mem[105] = 32'h0406_B043; // BLT R3, R4 (recon = pc + 6, imm = 3)
    dut.instr_inst.instr_mem[106] = 32'h0000_050F; // ADD R5, R15, R0
@@ -106,7 +106,8 @@ initial begin
    dut.instr_inst.instr_mem[151] = 32'h0000_F000; // HALT (shouldnt be executed)
    dut.instr_inst.instr_mem[152] = 32'h0900_810F; // ADDI R1, imm = 900, R15 (jumps here)
    dut.instr_inst.instr_mem[153] = 32'h0130_701F; // SW R1, 0x130(R15)
-   dut.instr_inst.instr_mem[154] = 32'h0000_F000; // HALT            
+   dut.instr_inst.instr_mem[154] = 32'h0000_F000; // HALT  
+   dut.instr_inst.instr_mem[155] = 32'h0000_F000; // HALT          
 
     repeat(1200) @(posedge clk);
 
