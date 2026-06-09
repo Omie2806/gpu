@@ -48,7 +48,7 @@ Reconvergence PC(Immediate Post Dominator offset) is given in the branch instruc
 
 <img width="1364" height="579" alt="image" src="https://github.com/user-attachments/assets/23b035e7-9ab8-4f6b-aff3-a46ebd9e36ba" />
 
-**Example:
+**Example**:
 ```
    dut.instr_inst.instr_mem[100] = 32'h0000_010F; // ADD R1, R15, R0
    dut.instr_inst.instr_mem[101] = 32'h0006_8200; // ADDI R2, imm = 6, R0 
@@ -70,7 +70,7 @@ Reconvergence PC(Immediate Post Dominator offset) is given in the branch instruc
 ```
 Two BLT instructions are nested, the outer branch at PC=102 splits all 16 threads based on whether thread_idx < 6, sending threads 0-5 to the reconverge point directly while threads 6-15 continue into a second BLT at PC=105 that further splits them based on thread_idx > 7. This creates two active divergence levels on the stack simultaneously, with the inner masks correctly ANDed against the outer active mask so threads 0-5 can never be reactivated by the inner branch. Both levels reconverge in order inner first at PC=111, outer at PC=116 and then restoring the full 16-thread active mask.
 
-**Mask example
+**Mask example**
 <img width="1334" height="176" alt="image" src="https://github.com/user-attachments/assets/c7cb648b-886b-42fd-a0a7-985040a84563" />
 
 
