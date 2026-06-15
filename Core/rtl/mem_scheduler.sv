@@ -1,3 +1,7 @@
+//i think i can remove req_check state(added it earlier due to some timing issues) 
+//btw sw and lw both wait 1 cycle before writing or reading the dmem(lw read is combinational so not required but i can later make it synchronous to 
+//infer it as bram)
+//capture is used to save lw data before writing in the reg files of that warp
 module mem_scheduler #(
     parameter NUMBER_OF_WARPS   = 4,
     parameter ADDR_WIDTH        = 16,
