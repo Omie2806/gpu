@@ -89,7 +89,7 @@ always_ff @(posedge clk) begin
                 if(mem_req) begin
                     WARP_STALL[current_warp]   <= 1;
                     state_curr                 <= REQUESTING;
-                    WARP_PC[warp_id_from_ms][stack_pointer[current_warp]] <= WARP_PC[warp_id_from_ms][stack_pointer[current_warp]] + 1;
+                    WARP_PC[current_warp][stack_pointer[current_warp]] <= WARP_PC[current_warp][stack_pointer[current_warp]] + 1;
                 end
                 else if(mem_done) begin
                     WARP_STALL[warp_id_from_ms] <= 0;
